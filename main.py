@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 from data_processor import DataProcessor
+from sklearn.preprocessing import StandardScaler
 from visualization import ChartGenerator
 from utils import save_data_to_file, load_data_from_file
 import config
@@ -100,7 +101,7 @@ def display_main_content():
     # Data processing section
     st.header("Data Processing")
     
-    processor = DataProcessor()
+    processor = DataProcessor(scaler=StandardScaler())
     
     # Processing options
     col1, col2, col3 = st.columns(3)

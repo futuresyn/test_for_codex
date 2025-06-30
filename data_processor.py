@@ -1,14 +1,18 @@
 import pandas as pd
 import numpy as np
-from sklearn.preprocessing import StandardScaler, MinMaxScaler
+from sklearn.preprocessing import StandardScaler
 from sklearn.impute import SimpleImputer
+from typing import Optional
 import warnings
+
 warnings.filterwarnings('ignore')
 
 class DataProcessor:
-    def __init__(self):
-        self.scaler = StandardScaler()
-        self.imputer = SimpleImputer(strategy='mean')
+    def __init__(self, scaler: Optional[StandardScaler] = None,
+                 imputer: Optional[SimpleImputer] = None):
+        """Initialize the processor with optional scaler and imputer."""
+        self.scaler = scaler or StandardScaler()
+        self.imputer = imputer or SimpleImputer(strategy='mean')
         self.processed_columns = []
     
     def process_dataset(self, df, clean_missing=True, normalize=False, remove_outliers=False):
