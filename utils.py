@@ -8,7 +8,10 @@ import logging
 import sys
 import hashlib
 import requests
-from typing import List, Dict, Any, Optional
+import psutil
+import tempfile
+import gc
+from typing import List, Dict, Any, Optional, Iterable
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -304,3 +307,47 @@ def fetch_external_data(url, format='json'):
     except requests.exceptions.RequestException as e:
         logger.error(f"Error fetching data from {url}: {str(e)}")
         return None
+
+
+def get_process_memory_mb() -> float:
+    """Return current process memory usage in MB."""
+    process = psutil.Process(os.getpid())
+    return process.memory_info().rss / (1024 * 1024)
+
+
+def save_uploaded_file_temp(uploaded_file, temp_dir: str = "temp") -> str:
+    """Save uploaded file to a temporary location and return the path."""
+    os.makedirs(temp_dir, exist_ok=True)
+    temp_path = os.path.join(temp_dir, uploaded_file.name)
+    with open(temp_path, "wb") as f:
+        f.write(uploaded_file.getbuffer())
+    logger.info("Saved uploaded file to temporary path %s", temp_path)
+    return temp_path
+
+
+def cleanup_temp_files(paths: Iterable[str]) -> None:
+    """Delete temporary files if they exist."""
+    for path in paths:
+        try:
+            if path and os.path.exists(path):
+                os.remove(path)
+                logger.info("Deleted temporary file %s", path)
+        except OSError as e:
+            logger.warning("Could not delete %s: %s", path, e)
+
+
+def cleanup_old_temp_files(temp_dir: str = "temp", expiry_hours: int = 1) -> None:
+    """Remove temp files older than a threshold."""
+    if not os.path.exists(temp_dir):
+        return
+    threshold = datetime.now() - timedelta(hours=expiry_hours)
+    for fname in os.listdir(temp_dir):
+        path = os.path.join(temp_dir, fname)
+        if os.path.isfile(path):
+            mtime = datetime.fromtimestamp(os.path.getmtime(path))
+            if mtime < threshold:
+                try:
+                    os.remove(path)
+                    logger.info("Auto-cleaned %s", path)
+                except OSError as e:
+                    logger.warning("Failed to remove %s: %s", path, e)

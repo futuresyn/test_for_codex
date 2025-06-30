@@ -3,7 +3,14 @@ import pandas as pd
 import numpy as np
 from data_processor import DataProcessor
 from visualization import ChartGenerator
-from utils import save_data_to_file, load_data_from_file
+from utils import (
+    save_data_to_file,
+    load_data_from_file,
+    save_uploaded_file_temp,
+    cleanup_temp_files,
+    cleanup_old_temp_files,
+    get_process_memory_mb,
+)
 import config
 import time
 import os
@@ -12,12 +19,16 @@ st.set_page_config(page_title="Data Analysis Dashboard", layout="wide")
 
 def main():
     st.title("📊 Advanced Data Analysis Dashboard")
-    
+
+    cleanup_old_temp_files()
+
     # Initialize session state
     if 'data' not in st.session_state:
         st.session_state.data = None
     if 'processed_data' not in st.session_state:
         st.session_state.processed_data = None
+    if 'temp_files' not in st.session_state:
+        st.session_state.temp_files = []
     
     # Sidebar
     st.sidebar.header("Data Input")
@@ -30,16 +41,37 @@ def main():
     
     # Sample data generation
     if st.sidebar.button("Generate Sample Data"):
+        cleanup_temp_files(st.session_state.temp_files)
+        st.session_state.temp_files = []
         data = generate_sample_data()
         st.session_state.data = data
+        st.session_state.large_data_file = None
         st.success("Sample data generated!")
     
     # Process uploaded file
     if uploaded_file is not None:
+        file_mb = uploaded_file.size / (1024 * 1024)
+        cleanup_temp_files(st.session_state.temp_files)
+        st.session_state.temp_files = []
+
         try:
-            data = pd.read_csv(uploaded_file)
-            st.session_state.data = data
-            st.success(f"Data loaded successfully! Shape: {data.shape}")
+            if file_mb > 100:
+                tmp_path = save_uploaded_file_temp(uploaded_file)
+                processor = DataProcessor()
+                with st.spinner("Processing large dataset in chunks..."):
+                    processed_path = processor.process_large_dataset(tmp_path)
+                st.session_state.temp_files.extend([tmp_path, processed_path])
+                data_preview = pd.read_csv(processed_path, nrows=1000)
+                st.session_state.data = data_preview
+                st.session_state.large_data_file = processed_path
+                st.success(
+                    f"Large dataset processed in chunks. Preview loaded ({len(data_preview)} rows)."
+                )
+            else:
+                data = pd.read_csv(uploaded_file)
+                st.session_state.data = data
+                st.session_state.large_data_file = None
+                st.success(f"Data loaded successfully! Shape: {data.shape}")
         except Exception as e:
             st.error(f"Error loading file: {e}")
     
@@ -86,6 +118,7 @@ def display_main_content():
         st.write(f"**Shape:** {data.shape}")
         st.write(f"**Columns:** {list(data.columns)}")
         st.write(f"**Memory Usage:** {data.memory_usage().sum() / 1024:.2f} KB")
+        st.write(f"**Process Memory:** {get_process_memory_mb():.2f} MB")
         
         # Missing values
         missing = data.isnull().sum()

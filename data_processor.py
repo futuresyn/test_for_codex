@@ -1,8 +1,17 @@
 import pandas as pd
 import numpy as np
-from sklearn.preprocessing import StandardScaler, MinMaxScaler
+from sklearn.preprocessing import StandardScaler
 from sklearn.impute import SimpleImputer
+import tempfile
+import os
+import gc
 import warnings
+
+from typing import Optional
+
+import utils
+import config
+
 warnings.filterwarnings('ignore')
 
 class DataProcessor:
@@ -133,7 +142,31 @@ class DataProcessor:
                 df = pd.concat([df, dummies], axis=1)
         
         return df
-    
+
+    def process_large_dataset(self, file_path: str, *, clean_missing: bool = True,
+                              normalize: bool = False, remove_outliers: bool = False,
+                              temp_dir: str = "temp") -> str:
+        """Process a large CSV file in chunks and store the result in a temp file."""
+
+        os.makedirs(temp_dir, exist_ok=True)
+        temp_output = tempfile.NamedTemporaryFile(delete=False, suffix=".csv", dir=temp_dir)
+        header_written = False
+
+        for chunk in pd.read_csv(file_path, chunksize=config.CHUNK_SIZE):
+            chunk = self.process_dataset(
+                chunk,
+                clean_missing=clean_missing,
+                normalize=normalize,
+                remove_outliers=remove_outliers,
+            )
+            chunk.to_csv(temp_output.name, mode="a", index=False, header=not header_written)
+            header_written = True
+
+            if utils.get_process_memory_mb() > config.MEMORY_LIMIT_MB:
+                gc.collect()
+
+        return temp_output.name
+
     def calculate_statistics(self, df):
         """Calculate basic statistics for the dataset"""
         
