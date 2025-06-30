@@ -58,7 +58,7 @@ class DataProcessor:
         for col in datetime_cols:
             if df[col].isnull().sum() > 0:
                 # Forward fill for datetime
-                df[col].fillna(method='ffill', inplace=True)
+                df[col].ffill(inplace=True)
         
         return df
     
